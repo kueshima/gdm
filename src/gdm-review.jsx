@@ -30,6 +30,35 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const emptyProgress = () => ({ level: 0, dueAt: 0, lastReview: 0 });
+const DRIVE_THUMBNAIL_SIZE = "w1000";
+
+function getGoogleDriveFileId(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host !== "drive.google.com" && host !== "docs.google.com") return "";
+
+    const fileMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/);
+    if (fileMatch) return fileMatch[1];
+
+    const id = parsed.searchParams.get("id");
+    return id || "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeImageUrl(url) {
+  const trimmed = (url || "").trim();
+  if (!trimmed) return "";
+
+  const driveFileId = getGoogleDriveFileId(trimmed);
+  if (driveFileId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=${DRIVE_THUMBNAIL_SIZE}`;
+  }
+
+  return trimmed;
+}
 
 const EMOJI_BANK = {
   "人": ["🧑", "👦", "👧", "👨", "👩", "👴", "👵", "🧑‍🏫", "🧑‍🎓", "👶"],
@@ -76,7 +105,7 @@ function buildContentFromRows(rows) {
     if (!en) return;
     const title = getField(row, "lesson") || "未分類";
     const emoji = getField(row, "emoji");
-    const image = getField(row, "image");
+    const image = normalizeImageUrl(getField(row, "image"));
     const note = getField(row, "note");
     if (!byTitle[title]) {
       byTitle[title] = { title, emoji: emoji || "📇", cards: [] };
@@ -654,14 +683,17 @@ function SheetSyncPanel({ sheetUrl, onSaveSheetUrl, onSyncSheet }) {
 
 /* ---------------- Card Visual ---------------- */
 function CardVisual({ card, className, iconSize = 18 }) {
+  const [failedUrl, setFailedUrl] = useState("");
+
   if (card.visualType === "photo") {
-    if (!card.photoUrl) return <ImageOff className={className} size={iconSize} />;
+    const photoUrl = normalizeImageUrl(card.photoUrl);
+    if (!photoUrl || failedUrl === photoUrl) return <ImageOff className={className} size={iconSize} />;
     return (
       <img
-        src={card.photoUrl}
+        src={photoUrl}
         alt={card.en || ""}
         className={className}
-        onError={(e) => { e.currentTarget.style.display = "none"; }}
+        onError={() => setFailedUrl(photoUrl)}
       />
     );
   }
@@ -782,6 +814,7 @@ function CardForm({ initial, onCancel, onSave }) {
   const [en, setEn] = useState(initial?.en || "");
   const [note, setNote] = useState(initial?.note || "");
   const [tab, setTab] = useState(Object.keys(EMOJI_BANK)[0]);
+  const normalizedPhotoUrl = normalizeImageUrl(photoUrl);
 
   const canSave = en.trim() && ((visualType === "emoji" && emoji.trim()) || (visualType === "photo" && photoUrl.trim()));
 
@@ -792,7 +825,7 @@ function CardForm({ initial, onCancel, onSave }) {
       note: note.trim(),
       visualType,
       emoji: visualType === "emoji" ? emoji.trim() : "",
-      photoUrl: visualType === "photo" ? photoUrl.trim() : undefined,
+      photoUrl: visualType === "photo" ? normalizedPhotoUrl : undefined,
     });
   };
 
@@ -830,8 +863,8 @@ function CardForm({ initial, onCancel, onSave }) {
         <>
           <div className="flex gap-3 mb-3">
             <div className="w-16 h-16 rounded border border-[#c9bb9a] bg-white/60 flex items-center justify-center overflow-hidden shrink-0">
-              {photoUrl ? (
-                <img src={photoUrl} alt="" className="w-16 h-16 object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+              {normalizedPhotoUrl ? (
+                <img src={normalizedPhotoUrl} alt="" className="w-16 h-16 object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
               ) : (
                 <ImageOff className="text-[#8a7a5c]" size={20} />
               )}
