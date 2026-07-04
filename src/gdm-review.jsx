@@ -30,12 +30,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const emptyProgress = () => ({ level: 0, dueAt: 0, lastReview: 0 });
-const DRIVE_THUMBNAIL_SIZE = "w1000";
+const DRIVE_IMAGE_SIZE = "w1000";
 
 function getGoogleDriveFileId(url) {
   try {
     const parsed = new URL(url);
     const host = parsed.hostname.toLowerCase();
+    if (host === "lh3.googleusercontent.com") {
+      const directMatch = parsed.pathname.match(/^\/d\/([^/=]+)/);
+      return directMatch ? directMatch[1] : "";
+    }
     if (host !== "drive.google.com" && host !== "docs.google.com") return "";
 
     const fileMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/);
@@ -54,7 +58,7 @@ function normalizeImageUrl(url) {
 
   const driveFileId = getGoogleDriveFileId(trimmed);
   if (driveFileId) {
-    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=${DRIVE_THUMBNAIL_SIZE}`;
+    return `https://lh3.googleusercontent.com/d/${encodeURIComponent(driveFileId)}=${DRIVE_IMAGE_SIZE}`;
   }
 
   return trimmed;
